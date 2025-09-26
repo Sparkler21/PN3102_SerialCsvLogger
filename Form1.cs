@@ -16,25 +16,25 @@ namespace SerialCsvLogger
         private StreamWriter _writer;
         private string _csvPath;
 
-        // Port B: commands to second device
+        // Port B: commands + now receive view
         private SerialPort _port2;
 
-        // --- UI: Port A (existing) ---
+        // --- UI: Port A (logging) ---
         private ComboBox portBox;
         private ComboBox baudBox;
         private Button startBtn;
         private Button stopBtn;
         private Button saveAsBtn;
-        private Button clearBtn;
+        private Button clearABtn;   // Clear live A
         private Label statusLabel;
-        private RichTextBox liveBox;
+        private RichTextBox liveBoxA;
 
         private TextBox sendBox;
         private Button sendBtn;
         private ComboBox lineEndBox;   // None, \n, \r, \r\n
         private CheckBox echoCheck;
 
-        // --- UI: Port B (NEW) ---
+        // --- UI: Port B (commands + receive) ---
         private ComboBox port2Box;
         private ComboBox baud2Box;
         private Button connect2Btn;
@@ -45,6 +45,9 @@ namespace SerialCsvLogger
         private Button sendIntBtn;
         private CheckBox echo2Check;
 
+        private Button clearBBtn;      // Clear live B
+        private RichTextBox liveBoxB;  // NEW: receive view for Port B
+
         public Form1()
         {
             InitializeComponent();
@@ -54,8 +57,8 @@ namespace SerialCsvLogger
 
         private void BuildUi()
         {
-            Text = "Serial → CSV Logger (WindSpeed/WindDirection + 2nd Port Commands)";
-            Width = 930; Height = 700;
+            Text = "Serial → CSV Logger (Wind A + Command/Receive B)";
+            Width = 980; Height = 820;
             FormClosing += (s, e) => Cleanup();
 
             // --- Top row (Port A controls) ---
@@ -67,45 +70,67 @@ namespace SerialCsvLogger
             saveAsBtn = new Button { Left = 270, Top = 10, Width = 120, Height = 28, Text = "Save CSV As…" };
             startBtn = new Button { Left = 395, Top = 10, Width = 80, Height = 28, Text = "Start" };
             stopBtn = new Button { Left = 480, Top = 10, Width = 80, Height = 28, Text = "Stop", Enabled = false };
-            clearBtn = new Button { Left = 565, Top = 10, Width = 80, Height = 28, Text = "Clear" };
+            clearABtn = new Button { Left = 565, Top = 10, Width = 90, Height = 28, Text = "Clear A" };
 
-            statusLabel = new Label { Left = 12, Top = 46, Width = 890, Height = 20, Text = "Idle." };
+            statusLabel = new Label { Left = 12, Top = 46, Width = 940, Height = 20, Text = "Idle." };
 
-            // --- Send row for Port A (existing) ---
-            sendBox = new TextBox { Left = 12, Top = 72, Width = 600, TabIndex = 0 };
-            lineEndBox = new ComboBox { Left = 615, Top = 72, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
+            // --- Send row for Port A ---
+            sendBox = new TextBox { Left = 12, Top = 72, Width = 620, TabIndex = 0 };
+            lineEndBox = new ComboBox { Left = 637, Top = 72, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
             lineEndBox.Items.AddRange(new object[] { "None", "\\n", "\\r", "\\r\\n" });
             lineEndBox.SelectedIndex = 1; // \n default
-            sendBtn = new Button { Left = 720, Top = 70, Width = 75, Height = 26, Text = "Send A" };
-            echoCheck = new CheckBox { Left = 800, Top = 74, Width = 100, Text = "Echo A", Checked = true };
+            sendBtn = new Button { Left = 742, Top = 70, Width = 85, Height = 26, Text = "Send A" };
+            echoCheck = new CheckBox { Left = 834, Top = 74, Width = 100, Text = "Echo A", Checked = true };
 
-            // --- NEW: Port B controls row ---
-            port2Box = new ComboBox { Left = 12, Top = 104, Width = 140, DropDownStyle = ComboBoxStyle.DropDownList };
-            baud2Box = new ComboBox { Left = 160, Top = 104, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
+            // --- Port A live view label ---
+            var aLabel = new Label { Left = 12, Top = 104, Width = 300, Height = 18, Text = "Port A — Live (parsed wind):" };
+
+            // --- Port A live view ---
+            liveBoxA = new RichTextBox
+            {
+                Left = 12,
+                Top = 124,
+                Width = 940,
+                Height = 260,
+                ReadOnly = true,
+                DetectUrls = false,
+                WordWrap = false,
+                Font = new Font("Consolas", 9)
+            };
+
+            // --- Port B controls row ---
+            var bHeader = new Label { Left = 12, Top = 392, Width = 300, Height = 18, Text = "Port B — Command + Receive:" };
+
+            port2Box = new ComboBox { Left = 12, Top = 414, Width = 140, DropDownStyle = ComboBoxStyle.DropDownList };
+            baud2Box = new ComboBox { Left = 160, Top = 414, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
             baud2Box.Items.AddRange(new object[] { "9600", "19200", "38400", "57600", "115200", "230400" });
             baud2Box.SelectedItem = "115200";
-            connect2Btn = new Button { Left = 270, Top = 102, Width = 90, Height = 28, Text = "Connect B" };
-            disconnect2Btn = new Button { Left = 365, Top = 102, Width = 95, Height = 28, Text = "Disconnect", Enabled = false };
+            connect2Btn = new Button { Left = 270, Top = 412, Width = 90, Height = 28, Text = "Connect B" };
+            disconnect2Btn = new Button { Left = 365, Top = 412, Width = 95, Height = 28, Text = "Disconnect", Enabled = false };
 
-            intBox = new NumericUpDown { Left = 468, Top = 104, Width = 100, Minimum = 0, Maximum = 65535, DecimalPlaces = 0 };
-            sendModeBox = new ComboBox { Left = 572, Top = 104, Width = 150, DropDownStyle = ComboBoxStyle.DropDownList };
+            intBox = new NumericUpDown { Left = 468, Top = 414, Width = 100, Minimum = 0, Maximum = 65535, DecimalPlaces = 0 };
+            sendModeBox = new ComboBox { Left = 572, Top = 414, Width = 170, DropDownStyle = ComboBoxStyle.DropDownList };
             sendModeBox.Items.AddRange(new object[] { "ASCII decimal", "Single byte (0–255)" });
             sendModeBox.SelectedIndex = 0;
 
-            lineEnd2Box = new ComboBox { Left = 726, Top = 104, Width = 90, DropDownStyle = ComboBoxStyle.DropDownList };
+            lineEnd2Box = new ComboBox { Left = 746, Top = 414, Width = 90, DropDownStyle = ComboBoxStyle.DropDownList };
             lineEnd2Box.Items.AddRange(new object[] { "None", "\\n", "\\r", "\\r\\n" });
-            lineEnd2Box.SelectedIndex = 0; // None default (common for raw integer commands)
+            lineEnd2Box.SelectedIndex = 0;
 
-            sendIntBtn = new Button { Left = 820, Top = 102, Width = 80, Height = 28, Text = "Send B", Enabled = false };
-            echo2Check = new CheckBox { Left = 820, Top = 134, Width = 80, Text = "Echo B", Checked = true, Enabled = false };
+            sendIntBtn = new Button { Left = 840, Top = 412, Width = 70, Height = 28, Text = "Send B", Enabled = false };
+            echo2Check = new CheckBox { Left = 912, Top = 416, Width = 80, Text = "Echo B", Checked = true, Enabled = false };
 
-            // --- Live view box ---
-            liveBox = new RichTextBox
+            // --- Clear B + label ---
+            clearBBtn = new Button { Left = 865, Top = 446, Width = 87, Height = 24, Text = "Clear B", Enabled = false };
+            var bRecvLabel = new Label { Left = 12, Top = 446, Width = 200, Height = 18, Text = "Port B — Incoming:" };
+
+            // --- NEW: Port B live view ---
+            liveBoxB = new RichTextBox
             {
                 Left = 12,
-                Top = 160,
-                Width = 890,
-                Height = 480,
+                Top = 472,
+                Width = 940,
+                Height = 290,
                 ReadOnly = true,
                 DetectUrls = false,
                 WordWrap = false,
@@ -114,20 +139,19 @@ namespace SerialCsvLogger
 
             Controls.AddRange(new Control[] {
                 // Port A row
-                portBox, baudBox, saveAsBtn, startBtn, stopBtn, clearBtn, statusLabel,
-                // Port A send row
-                sendBox, lineEndBox, sendBtn, echoCheck,
-                // Port B row
-                port2Box, baud2Box, connect2Btn, disconnect2Btn, intBox, sendModeBox, lineEnd2Box, sendIntBtn, echo2Check,
-                // Live
-                liveBox
+                portBox, baudBox, saveAsBtn, startBtn, stopBtn, clearABtn, statusLabel,
+                // Port A send row + view
+                sendBox, lineEndBox, sendBtn, echoCheck, aLabel, liveBoxA,
+                // Port B row + view
+                bHeader, port2Box, baud2Box, connect2Btn, disconnect2Btn, intBox, sendModeBox, lineEnd2Box, sendIntBtn, echo2Check,
+                bRecvLabel, clearBBtn, liveBoxB
             });
 
-            // Wire events
+            // Wire events — Port A
             saveAsBtn.Click += SaveAsBtn_Click;
             startBtn.Click += StartBtn_Click;
             stopBtn.Click += StopBtn_Click;
-            clearBtn.Click += (s, e) => liveBox.Clear();
+            clearABtn.Click += (s, e) => liveBoxA.Clear();
 
             sendBtn.Click += (s, e) => SendCurrentTextA();
             sendBox.KeyDown += (s, e) =>
@@ -139,6 +163,7 @@ namespace SerialCsvLogger
                 }
             };
 
+            // Wire events — Port B
             connect2Btn.Click += Connect2Btn_Click;
             disconnect2Btn.Click += Disconnect2Btn_Click;
             sendIntBtn.Click += (s, e) => SendIntegerOnB();
@@ -150,9 +175,10 @@ namespace SerialCsvLogger
                     SendIntegerOnB();
                 }
             };
+            clearBBtn.Click += (s, e) => liveBoxB.Clear();
 
             SetSendUiEnabled(false); // Port A send disabled until connected
-            SetPortBUiEnabled(false); // Port B send disabled until connected
+            SetPortBUiEnabled(false); // Port B send/clear disabled until connected
         }
 
         private void LoadPorts()
@@ -165,7 +191,7 @@ namespace SerialCsvLogger
                 port2Box.Items.Add(name);
             }
             if (portBox.Items.Count > 0) portBox.SelectedIndex = 0;
-            if (port2Box.Items.Count > 0) port2Box.SelectedIndex = Math.Min(1, port2Box.Items.Count - 1); // pick a different one if available
+            if (port2Box.Items.Count > 0) port2Box.SelectedIndex = Math.Min(1, port2Box.Items.Count - 1); // try a different one by default
         }
 
         // ----- CSV path selection (Port A) -----
@@ -271,18 +297,18 @@ namespace SerialCsvLogger
                     // Live
                     BeginInvoke(new Action(() =>
                     {
-                        TrimLiveBox();
-                        liveBox.AppendText($"{ts}  WS={ws}  WD={wd}\n");
-                        liveBox.ScrollToCaret();
+                        TrimBox(liveBoxA);
+                        liveBoxA.AppendText($"{ts}  WS={ws}  WD={wd}\n");
+                        liveBoxA.ScrollToCaret();
                     }));
                 }
                 else
                 {
                     BeginInvoke(new Action(() =>
                     {
-                        TrimLiveBox();
-                        liveBox.AppendText($"{ts}  [A unparsed] {line}\n");
-                        liveBox.ScrollToCaret();
+                        TrimBox(liveBoxA);
+                        liveBoxA.AppendText($"{ts}  [A unparsed] {line}\n");
+                        liveBoxA.ScrollToCaret();
                         statusLabel.Text = "A: Received line not matching ,<WindSpeed>,<WindDirection>";
                     }));
                 }
@@ -308,7 +334,7 @@ namespace SerialCsvLogger
             return false;
         }
 
-        // ----- Sending on Port A (unchanged) -----
+        // ----- Sending on Port A -----
         private void SendCurrentTextA()
         {
             try
@@ -337,8 +363,8 @@ namespace SerialCsvLogger
                 if (echoCheck.Checked)
                 {
                     var ts = DateTime.Now.ToString("s");
-                    liveBox.AppendText($"{ts}  >>A {text}{(suffix == "None" ? "" : $" ({suffix})")}\n");
-                    liveBox.ScrollToCaret();
+                    liveBoxA.AppendText($"{ts}  >>A {text}{(suffix == "None" ? "" : $" ({suffix})")}\n");
+                    liveBoxA.ScrollToCaret();
                 }
 
                 sendBox.Clear();
@@ -380,6 +406,9 @@ namespace SerialCsvLogger
                 ReadTimeout = 1000,
                 WriteTimeout = 1000
             };
+
+            // NEW: receive handler for Port B
+            _port2.DataReceived += PortB_DataReceived;
 
             try
             {
@@ -436,8 +465,8 @@ namespace SerialCsvLogger
                     {
                         var ts = DateTime.Now.ToString("s");
                         string suffixNote = (suffix == "None") ? "" : $" ({suffix})";
-                        liveBox.AppendText($"{ts}  >>B (ASCII) {value}{suffixNote}\n");
-                        liveBox.ScrollToCaret();
+                        liveBoxB.AppendText($"{ts}  >>B (ASCII) {value}{suffixNote}\n");
+                        liveBoxB.ScrollToCaret();
                     }
                 }
                 else // Single byte (0–255)
@@ -453,8 +482,8 @@ namespace SerialCsvLogger
                     if (echo2Check.Checked)
                     {
                         var ts = DateTime.Now.ToString("s");
-                        liveBox.AppendText($"{ts}  >>B (byte) 0x{b:X2} ({value})\n");
-                        liveBox.ScrollToCaret();
+                        liveBoxB.AppendText($"{ts}  >>B (byte) 0x{b:X2} ({value})\n");
+                        liveBoxB.ScrollToCaret();
                     }
                 }
             }
@@ -468,12 +497,36 @@ namespace SerialCsvLogger
             }
         }
 
+        // NEW: receive data from Port B and show in its own window
+        private void PortB_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        {
+            try
+            {
+                // Read whatever is available; good default if protocol isn't strictly line-based
+                string chunk = _port2.ReadExisting();
+                if (string.IsNullOrEmpty(chunk)) return;
+
+                BeginInvoke(new Action(() =>
+                {
+                    TrimBox(liveBoxB);
+                    liveBoxB.AppendText(chunk);
+                    liveBoxB.ScrollToCaret();
+                }));
+            }
+            catch (TimeoutException) { }
+            catch (IOException)
+            {
+                BeginInvoke(new Action(() => statusLabel.Text = "B: I/O error (device removed?)."));
+            }
+            catch (InvalidOperationException) { /* Port closed while reading */ }
+        }
+
         // ----- Helpers -----
-        private void TrimLiveBox()
+        private void TrimBox(RichTextBox box)
         {
             const int maxChars = 500_000;
-            if (liveBox.TextLength > maxChars)
-                liveBox.Select(0, liveBox.TextLength - maxChars);
+            if (box.TextLength > maxChars)
+                box.Select(0, box.TextLength - maxChars);
         }
 
         private static string EscapeCsv(string s)
@@ -512,6 +565,7 @@ namespace SerialCsvLogger
             {
                 if (_port2 != null)
                 {
+                    _port2.DataReceived -= PortB_DataReceived;
                     if (_port2.IsOpen) _port2.Close();
                     _port2.Dispose();
                     _port2 = null;
@@ -540,6 +594,7 @@ namespace SerialCsvLogger
             sendModeBox.Enabled = on;
             lineEnd2Box.Enabled = on;
             echo2Check.Enabled = on;
+            clearBBtn.Enabled = on;
         }
     }
 }

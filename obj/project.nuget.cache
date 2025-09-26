@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "Y4zMZVrEilw=",
+  "dgSpecHash": "ZBMN2TVNyqk=",
   "success": true,
-  "projectFilePath": "C:\\Users\\C2029069\\Git\\SerialCsvLogger\\SerialCsvLogger\\SerialCsvLogger.csproj",
+  "projectFilePath": "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\SerialCsvLogger.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\C2029069\\.nuget\\packages\\runtime.android-arm.runtime.native.system.io.ports\\9.0.9\\runtime.android-arm.runtime.native.system.io.ports.9.0.9.nupkg.sha512",
     "C:\\Users\\C2029069\\.nuget\\packages\\runtime.android-arm64.runtime.native.system.io.ports\\9.0.9\\runtime.android-arm64.runtime.native.system.io.ports.9.0.9.nupkg.sha512",

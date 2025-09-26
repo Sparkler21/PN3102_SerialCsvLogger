@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\C2029069\\Git\\SerialCsvLogger\\SerialCsvLogger\\SerialCsvLogger.csproj": {}
+    "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\SerialCsvLogger.csproj": {}
   },
   "projects": {
-    "C:\\Users\\C2029069\\Git\\SerialCsvLogger\\SerialCsvLogger\\SerialCsvLogger.csproj": {
+    "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\SerialCsvLogger.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\C2029069\\Git\\SerialCsvLogger\\SerialCsvLogger\\SerialCsvLogger.csproj",
+        "projectUniqueName": "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\SerialCsvLogger.csproj",
         "projectName": "SerialCsvLogger",
-        "projectPath": "C:\\Users\\C2029069\\Git\\SerialCsvLogger\\SerialCsvLogger\\SerialCsvLogger.csproj",
+        "projectPath": "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\SerialCsvLogger.csproj",
         "packagesPath": "C:\\Users\\C2029069\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\C2029069\\Git\\SerialCsvLogger\\SerialCsvLogger\\obj\\",
+        "outputPath": "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

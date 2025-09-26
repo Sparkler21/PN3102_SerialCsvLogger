@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SerialCsvLogger")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+685b3cf8eca841a46f03c2d8588b8fa4674b4ca0")]
 [assembly: System.Reflection.AssemblyProductAttribute("SerialCsvLogger")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SerialCsvLogger")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

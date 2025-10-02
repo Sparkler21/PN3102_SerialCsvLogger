@@ -45,6 +45,11 @@ namespace SerialCsvLogger
         private Button sendIntBtn;
         private CheckBox echo2Check;
 
+        // NEW:
+        private ComboBox prefixBox;    // "A" or "R"
+        private Label prefixLabel;
+        private Button zeroBtn;        // sends "Z"
+
         private Button clearBBtn;      // Clear live B
         private RichTextBox liveBoxB;  // NEW: receive view for Port B
 
@@ -58,7 +63,7 @@ namespace SerialCsvLogger
         private void BuildUi()
         {
             Text = "Serial → CSV Logger (Wind A + Command/Receive B)";
-            Width = 980; Height = 820;
+            Width = 1120; Height = 820;
             FormClosing += (s, e) => Cleanup();
 
             // --- Top row (Port A controls) ---
@@ -109,27 +114,37 @@ namespace SerialCsvLogger
             disconnect2Btn = new Button { Left = 365, Top = 412, Width = 95, Height = 28, Text = "Disconnect", Enabled = false };
 
             intBox = new NumericUpDown { Left = 468, Top = 414, Width = 100, Minimum = 0, Maximum = 65535, DecimalPlaces = 0 };
-            sendModeBox = new ComboBox { Left = 572, Top = 414, Width = 170, DropDownStyle = ComboBoxStyle.DropDownList };
+
+            // NEW: prefix selector ("A" / "R")
+            prefixLabel = new Label { Left = 572, Top = 418, Width = 50, Height = 18, Text = "Prefix" };
+            prefixBox = new ComboBox { Left = 620, Top = 414, Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
+            prefixBox.Items.AddRange(new object[] { "A", "R" });
+            prefixBox.SelectedIndex = 0;
+
+            sendModeBox = new ComboBox { Left = 680, Top = 414, Width = 170, DropDownStyle = ComboBoxStyle.DropDownList };
             sendModeBox.Items.AddRange(new object[] { "ASCII decimal", "Single byte (0–255)" });
             sendModeBox.SelectedIndex = 0;
 
-            lineEnd2Box = new ComboBox { Left = 746, Top = 414, Width = 90, DropDownStyle = ComboBoxStyle.DropDownList };
+            lineEnd2Box = new ComboBox { Left = 854, Top = 414, Width = 90, DropDownStyle = ComboBoxStyle.DropDownList };
             lineEnd2Box.Items.AddRange(new object[] { "None", "\\n", "\\r", "\\r\\n" });
             lineEnd2Box.SelectedIndex = 0;
 
-            sendIntBtn = new Button { Left = 840, Top = 412, Width = 70, Height = 28, Text = "Send B", Enabled = false };
-            echo2Check = new CheckBox { Left = 912, Top = 416, Width = 80, Text = "Echo B", Checked = true, Enabled = false };
+            sendIntBtn = new Button { Left = 948, Top = 412, Width = 70, Height = 28, Text = "Send B", Enabled = false };
+            echo2Check = new CheckBox { Left = 1022, Top = 416, Width = 80, Text = "Echo B", Checked = true, Enabled = false };
 
             // --- Clear B + label ---
-            clearBBtn = new Button { Left = 865, Top = 446, Width = 87, Height = 24, Text = "Clear B", Enabled = false };
+            clearBBtn = new Button { Left = 1015, Top = 446, Width = 87, Height = 24, Text = "Clear B", Enabled = false };
             var bRecvLabel = new Label { Left = 12, Top = 446, Width = 200, Height = 18, Text = "Port B — Incoming:" };
 
-            // --- NEW: Port B live view ---
+            // NEW: Zero button (sends "Z")
+            zeroBtn = new Button { Left = 912, Top = 446, Width = 95, Height = 24, Text = "Zero", Enabled = false };
+
+            // --- Port B live view ---
             liveBoxB = new RichTextBox
             {
                 Left = 12,
                 Top = 472,
-                Width = 940,
+                Width = 1090,
                 Height = 290,
                 ReadOnly = true,
                 DetectUrls = false,
@@ -143,8 +158,8 @@ namespace SerialCsvLogger
                 // Port A send row + view
                 sendBox, lineEndBox, sendBtn, echoCheck, aLabel, liveBoxA,
                 // Port B row + view
-                bHeader, port2Box, baud2Box, connect2Btn, disconnect2Btn, intBox, sendModeBox, lineEnd2Box, sendIntBtn, echo2Check,
-                bRecvLabel, clearBBtn, liveBoxB
+                bHeader, port2Box, baud2Box, connect2Btn, disconnect2Btn, intBox, prefixLabel, prefixBox, sendModeBox, lineEnd2Box, sendIntBtn, echo2Check,
+                bRecvLabel, clearBBtn, zeroBtn, liveBoxB
             });
 
             // Wire events — Port A
@@ -167,6 +182,8 @@ namespace SerialCsvLogger
             connect2Btn.Click += Connect2Btn_Click;
             disconnect2Btn.Click += Disconnect2Btn_Click;
             sendIntBtn.Click += (s, e) => SendIntegerOnB();
+            sendModeBox.SelectedIndexChanged += SendModeBox_SelectedIndexChanged;
+            zeroBtn.Click += (s, e) => SendZeroOnB();
             intBox.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Enter && !e.Shift && !e.Control && !e.Alt)
@@ -419,6 +436,7 @@ namespace SerialCsvLogger
                 port2Box.Enabled = false;
                 baud2Box.Enabled = false;
                 SetPortBUiEnabled(true);
+                SendModeBox_SelectedIndexChanged(null, null); // apply enable/disable for prefix & line ending
                 intBox.Focus();
             }
             catch (Exception ex)
@@ -449,6 +467,9 @@ namespace SerialCsvLogger
 
                 if (sendModeBox.SelectedIndex == 0) // ASCII decimal
                 {
+                    // NEW: prefix "A" or "R"
+                    string prefix = (prefixBox.SelectedItem as string) ?? "A";
+
                     string suffix = lineEnd2Box.SelectedItem?.ToString() ?? "None";
                     string terminator = suffix switch
                     {
@@ -458,18 +479,18 @@ namespace SerialCsvLogger
                         _ => string.Empty
                     };
 
-                    string payload = value.ToString(CultureInfo.InvariantCulture) + terminator;
+                    string payload = prefix + value.ToString(CultureInfo.InvariantCulture) + terminator;
                     _port2.Write(payload);
 
                     if (echo2Check.Checked)
                     {
                         var ts = DateTime.Now.ToString("s");
                         string suffixNote = (suffix == "None") ? "" : $" ({suffix})";
-                        liveBoxB.AppendText($"{ts}  >>B (ASCII) {value}{suffixNote}\n");
+                        liveBoxB.AppendText($"{ts}  >>B (ASCII) {prefix}{value}{suffixNote}\n");
                         liveBoxB.ScrollToCaret();
                     }
                 }
-                else // Single byte (0–255)
+                else // Single byte (0–255) — prefix not applicable
                 {
                     if (value < 0 || value > 255)
                     {
@@ -522,6 +543,16 @@ namespace SerialCsvLogger
         }
 
         // ----- Helpers -----
+        private void SendModeBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            bool ascii = sendModeBox.SelectedIndex == 0;
+            if (sendIntBtn.Enabled) // only toggle when connected
+            {
+                lineEnd2Box.Enabled = ascii;
+                prefixBox.Enabled = ascii;
+            }
+        }
+
         private void TrimBox(RichTextBox box)
         {
             const int maxChars = 500_000;
@@ -592,9 +623,67 @@ namespace SerialCsvLogger
             intBox.Enabled = on;
             sendIntBtn.Enabled = on;
             sendModeBox.Enabled = on;
-            lineEnd2Box.Enabled = on;
+            lineEnd2Box.Enabled = on && sendModeBox.SelectedIndex == 0; // ASCII only
             echo2Check.Enabled = on;
             clearBBtn.Enabled = on;
+            zeroBtn.Enabled = on; // <--- NEW
+            // NEW:
+            prefixBox.Enabled = on && sendModeBox.SelectedIndex == 0;  // ASCII only
+        }
+
+        private void SendZeroOnB()
+        {
+            try
+            {
+                if (_port2 == null || !_port2.IsOpen)
+                {
+                    System.Media.SystemSounds.Beep.Play();
+                    statusLabel.Text = "B: Not connected — press Connect B first.";
+                    return;
+                }
+
+                if (sendModeBox.SelectedIndex == 0) // ASCII mode
+                {
+                    string suffix = lineEnd2Box.SelectedItem?.ToString() ?? "None";
+                    string terminator = suffix switch
+                    {
+                        "\\n" => "\n",
+                        "\\r" => "\r",
+                        "\\r\\n" => "\r\n",
+                        _ => string.Empty
+                    };
+
+                    _port2.Write("Z" + terminator);
+
+                    if (echo2Check.Checked)
+                    {
+                        var ts = DateTime.Now.ToString("s");
+                        string suffixNote = (suffix == "None") ? "" : $" ({suffix})";
+                        liveBoxB.AppendText($"{ts}  >>B Z{suffixNote}\n");
+                        liveBoxB.ScrollToCaret();
+                    }
+                }
+                else // Single byte mode
+                {
+                    byte z = 0x5A; // 'Z'
+                    _port2.Write(new byte[] { z }, 0, 1);
+
+                    if (echo2Check.Checked)
+                    {
+                        var ts = DateTime.Now.ToString("s");
+                        liveBoxB.AppendText($"{ts}  >>B (byte) 0x5A ('Z')\n");
+                        liveBoxB.ScrollToCaret();
+                    }
+                }
+            }
+            catch (TimeoutException)
+            {
+                statusLabel.Text = "B: Write timed out.";
+            }
+            catch (Exception ex)
+            {
+                statusLabel.Text = $"B: Send failed: {ex.Message}";
+            }
         }
     }
 }

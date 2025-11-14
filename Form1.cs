@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Globalization;
 using System.Drawing;
 using System.Windows.Forms;
+using System.Windows.Forms.DataVisualization.Charting;
 
 namespace SerialCsvLogger
 {
@@ -33,6 +34,11 @@ namespace SerialCsvLogger
         private Button sendBtn;
         private ComboBox lineEndBox;   // None, \n, \r, \r\n
         private CheckBox echoCheck;
+
+        // --- Charts (Port A) ---
+        private Chart speedChart;
+        private Chart dirChart;
+        private const int MaxChartPoints = 600; // keep ~10 minutes at 1 Hz
 
         // --- UI: Port B (commands + receive) ---
         private ComboBox port2Box;
@@ -62,8 +68,12 @@ namespace SerialCsvLogger
 
         private void BuildUi()
         {
-            Text = "Serial → CSV Logger (Wind A + Command/Receive B)";
-            Width = 1120; Height = 820;
+            Text = "Serial → CSV Logger (Wind A + Command/Receive B + Charts)";
+            Width = 1120;
+            int desired = 1060;
+            int maxH = Screen.FromControl(this).WorkingArea.Height - 60; // leave a little margin for taskbar
+            Height = Math.Min(desired, Math.Max(700, maxH));             // never smaller than 700
+            StartPosition = FormStartPosition.CenterScreen;
             FormClosing += (s, e) => Cleanup();
 
             // --- Top row (Port A controls) ---
@@ -77,7 +87,7 @@ namespace SerialCsvLogger
             stopBtn = new Button { Left = 480, Top = 10, Width = 80, Height = 28, Text = "Stop", Enabled = false };
             clearABtn = new Button { Left = 565, Top = 10, Width = 90, Height = 28, Text = "Clear A" };
 
-            statusLabel = new Label { Left = 12, Top = 46, Width = 940, Height = 20, Text = "Idle." };
+            statusLabel = new Label { Left = 12, Top = 46, Width = 1080, Height = 20, Text = "Idle." };
 
             // --- Send row for Port A ---
             sendBox = new TextBox { Left = 12, Top = 72, Width = 620, TabIndex = 0 };
@@ -90,62 +100,76 @@ namespace SerialCsvLogger
             // --- Port A live view label ---
             var aLabel = new Label { Left = 12, Top = 104, Width = 300, Height = 18, Text = "Port A — Live (parsed wind):" };
 
-            // --- Port A live view ---
+            // --- Port A live view (reduced height to make room for charts) ---
             liveBoxA = new RichTextBox
             {
                 Left = 12,
                 Top = 124,
-                Width = 940,
-                Height = 260,
+                Width = 1080,
+                Height = 160,
                 ReadOnly = true,
                 DetectUrls = false,
                 WordWrap = false,
                 Font = new Font("Consolas", 9)
             };
 
-            // --- Port B controls row ---
-            var bHeader = new Label { Left = 12, Top = 392, Width = 300, Height = 18, Text = "Port B — Command + Receive:" };
+            // --- NEW: Charts for Port A ---
+            speedChart = CreateChart("Wind Speed", "Time", "WindSpd");
+            speedChart.Left = 12; speedChart.Top = 124 + 160 + 8; speedChart.Width = 1080; speedChart.Height = 180;
+            speedChart.Series[0].Name = "WindSpeed";
 
-            port2Box = new ComboBox { Left = 12, Top = 414, Width = 140, DropDownStyle = ComboBoxStyle.DropDownList };
-            baud2Box = new ComboBox { Left = 160, Top = 414, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
+            dirChart = CreateChart("Wind Direction", "Time", "WindDir");
+            dirChart.Left = 12; dirChart.Top = speedChart.Top + speedChart.Height + 8; dirChart.Width = 1080; dirChart.Height = 180;
+            dirChart.Series[0].Name = "WindDirection";
+            var areaD = dirChart.ChartAreas[0];
+            areaD.AxisY.Minimum = 0;
+            areaD.AxisY.Maximum = 360;
+            areaD.AxisY.Interval = 90;
+
+            // --- Port B controls row (pushed down to make room for charts) ---
+            int chartsBlockHeight = (120 + 8) + (120 + 8); // speed chart + spacing + dir chart + spacing
+            int shift = chartsBlockHeight;                 // ~256px shift from your previous layout
+
+            var bHeader = new Label { Left = 12, Top = 392 + shift, Width = 300, Height = 18, Text = "Port B — Command + Receive:" };
+
+            port2Box = new ComboBox { Left = 12, Top = 414 + shift, Width = 140, DropDownStyle = ComboBoxStyle.DropDownList };
+            baud2Box = new ComboBox { Left = 160, Top = 414 + shift, Width = 100, DropDownStyle = ComboBoxStyle.DropDownList };
             baud2Box.Items.AddRange(new object[] { "9600", "19200", "38400", "57600", "115200", "230400" });
             baud2Box.SelectedItem = "115200";
-            connect2Btn = new Button { Left = 270, Top = 412, Width = 90, Height = 28, Text = "Connect B" };
-            disconnect2Btn = new Button { Left = 365, Top = 412, Width = 95, Height = 28, Text = "Disconnect", Enabled = false };
+            connect2Btn = new Button { Left = 270, Top = 412 + shift, Width = 90, Height = 28, Text = "Connect B" };
+            disconnect2Btn = new Button { Left = 365, Top = 412 + shift, Width = 95, Height = 28, Text = "Disconnect", Enabled = false };
 
-            intBox = new NumericUpDown { Left = 468, Top = 414, Width = 100, Minimum = 0, Maximum = 65535, DecimalPlaces = 0 };
+            intBox = new NumericUpDown { Left = 468, Top = 414 + shift, Width = 100, Minimum = 0, Maximum = 65535, DecimalPlaces = 0 };
 
-            // NEW: prefix selector ("A" / "R")
-            prefixLabel = new Label { Left = 572, Top = 418, Width = 50, Height = 18, Text = "Prefix" };
-            prefixBox = new ComboBox { Left = 620, Top = 414, Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
+            // Prefix ("A"/"R")
+            prefixLabel = new Label { Left = 572, Top = 418 + shift, Width = 50, Height = 18, Text = "Prefix" };
+            prefixBox = new ComboBox { Left = 620, Top = 414 + shift, Width = 50, DropDownStyle = ComboBoxStyle.DropDownList };
             prefixBox.Items.AddRange(new object[] { "A", "R" });
             prefixBox.SelectedIndex = 0;
 
-            sendModeBox = new ComboBox { Left = 680, Top = 414, Width = 170, DropDownStyle = ComboBoxStyle.DropDownList };
+            sendModeBox = new ComboBox { Left = 680, Top = 414 + shift, Width = 170, DropDownStyle = ComboBoxStyle.DropDownList };
             sendModeBox.Items.AddRange(new object[] { "ASCII decimal", "Single byte (0–255)" });
             sendModeBox.SelectedIndex = 0;
 
-            lineEnd2Box = new ComboBox { Left = 854, Top = 414, Width = 90, DropDownStyle = ComboBoxStyle.DropDownList };
+            lineEnd2Box = new ComboBox { Left = 854, Top = 414 + shift, Width = 90, DropDownStyle = ComboBoxStyle.DropDownList };
             lineEnd2Box.Items.AddRange(new object[] { "None", "\\n", "\\r", "\\r\\n" });
-            lineEnd2Box.SelectedIndex = 0;
+            lineEnd2Box.SelectedIndex = 3;
 
-            sendIntBtn = new Button { Left = 948, Top = 412, Width = 70, Height = 28, Text = "Send B", Enabled = false };
-            echo2Check = new CheckBox { Left = 1022, Top = 416, Width = 80, Text = "Echo B", Checked = true, Enabled = false };
+            sendIntBtn = new Button { Left = 948, Top = 412 + shift, Width = 70, Height = 28, Text = "Send B", Enabled = false };
+            echo2Check = new CheckBox { Left = 1022, Top = 416 + shift, Width = 80, Text = "Echo B", Checked = true, Enabled = false };
 
-            // --- Clear B + label ---
-            clearBBtn = new Button { Left = 1015, Top = 446, Width = 87, Height = 24, Text = "Clear B", Enabled = false };
-            var bRecvLabel = new Label { Left = 12, Top = 446, Width = 200, Height = 18, Text = "Port B — Incoming:" };
+            // Clear B / Zero + label
+            clearBBtn = new Button { Left = 1015, Top = 446 + shift, Width = 87, Height = 24, Text = "Clear B", Enabled = false };
+            zeroBtn = new Button { Left = 912, Top = 446 + shift, Width = 95, Height = 24, Text = "Zero", Enabled = false };
+            var bRecvLabel = new Label { Left = 12, Top = 446 + shift, Width = 200, Height = 18, Text = "Port B — Angle Control:" };
 
-            // NEW: Zero button (sends "Z")
-            zeroBtn = new Button { Left = 912, Top = 446, Width = 95, Height = 24, Text = "Zero", Enabled = false };
-
-            // --- Port B live view ---
+            // Port B live view
             liveBoxB = new RichTextBox
             {
                 Left = 12,
-                Top = 472,
-                Width = 1090,
-                Height = 290,
+                Top = 472 + shift,
+                Width = 1080,
+                Height = 160,
                 ReadOnly = true,
                 DetectUrls = false,
                 WordWrap = false,
@@ -153,14 +177,18 @@ namespace SerialCsvLogger
             };
 
             Controls.AddRange(new Control[] {
-                // Port A row
-                portBox, baudBox, saveAsBtn, startBtn, stopBtn, clearABtn, statusLabel,
-                // Port A send row + view
-                sendBox, lineEndBox, sendBtn, echoCheck, aLabel, liveBoxA,
-                // Port B row + view
-                bHeader, port2Box, baud2Box, connect2Btn, disconnect2Btn, intBox, prefixLabel, prefixBox, sendModeBox, lineEnd2Box, sendIntBtn, echo2Check,
-                bRecvLabel, clearBBtn, zeroBtn, liveBoxB
-            });
+        // Port A row
+        portBox, baudBox, saveAsBtn, startBtn, stopBtn, clearABtn, statusLabel,
+        // Port A send row + view
+        sendBox, lineEndBox, sendBtn, echoCheck, aLabel, liveBoxA,
+        // Charts
+        speedChart, dirChart,
+        // Port B row + view
+        bHeader, port2Box, baud2Box, connect2Btn, disconnect2Btn, intBox,
+        prefixLabel, prefixBox,
+        sendModeBox, lineEnd2Box, sendIntBtn, echo2Check,
+        bRecvLabel, clearBBtn, zeroBtn, liveBoxB
+    });
 
             // Wire events — Port A
             saveAsBtn.Click += SaveAsBtn_Click;
@@ -182,8 +210,6 @@ namespace SerialCsvLogger
             connect2Btn.Click += Connect2Btn_Click;
             disconnect2Btn.Click += Disconnect2Btn_Click;
             sendIntBtn.Click += (s, e) => SendIntegerOnB();
-            sendModeBox.SelectedIndexChanged += SendModeBox_SelectedIndexChanged;
-            zeroBtn.Click += (s, e) => SendZeroOnB();
             intBox.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Enter && !e.Shift && !e.Control && !e.Alt)
@@ -193,10 +219,13 @@ namespace SerialCsvLogger
                 }
             };
             clearBBtn.Click += (s, e) => liveBoxB.Clear();
+            zeroBtn.Click += (s, e) => SendZeroOnB();
+            sendModeBox.SelectedIndexChanged += SendModeBox_SelectedIndexChanged;
 
             SetSendUiEnabled(false); // Port A send disabled until connected
             SetPortBUiEnabled(false); // Port B send/clear disabled until connected
         }
+
 
         private void LoadPorts()
         {
@@ -289,10 +318,52 @@ namespace SerialCsvLogger
             SetSendUiEnabled(false);
         }
 
-        // ----- DataReceived for Port A (wind CSV) -----
-        private static readonly Regex WindRegex =
-            new Regex(@"^\s*,\s*([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)\s*$",
-                      RegexOptions.Compiled);
+        private Chart CreateChart(string title, string xTitle, string yTitle)
+        {
+            var chart = new Chart();
+            var area = new ChartArea();
+            chart.ChartAreas.Add(area);
+
+            // X axis as time
+            area.AxisX.LabelStyle.Format = "HH:mm:ss";
+            area.AxisX.IntervalAutoMode = IntervalAutoMode.VariableCount;
+            area.AxisX.MajorGrid.LineDashStyle = ChartDashStyle.Dot;
+
+            area.AxisY.MajorGrid.LineDashStyle = ChartDashStyle.Dot;
+            area.AxisY.Title = yTitle;
+
+            var series = new Series(title)
+            {
+                ChartType = SeriesChartType.FastLine,
+                XValueType = ChartValueType.DateTime
+            };
+            chart.Series.Add(series);
+
+            chart.Titles.Add(title);
+            chart.Titles[0].Font = new Font("Segoe UI", 9, FontStyle.Bold);
+
+            return chart;
+        }
+
+        // Replace your old AppendChartPoint(Series s, ...) with this version:
+        private void AppendChartPoint(Chart chart, DateTime t, double value)
+        {
+            var s = chart.Series[0];
+            s.Points.AddXY(t, value);
+            if (s.Points.Count > MaxChartPoints)
+                s.Points.RemoveAt(0);
+
+            // Adjust X axis to keep latest window visible
+            var area = chart.ChartAreas[0];
+            if (s.Points.Count > 1)
+            {
+                double minX = s.Points[0].XValue;
+                double maxX = s.Points[^1].XValue;
+                area.AxisX.Minimum = minX;
+                area.AxisX.Maximum = maxX;
+            }
+        }
+
 
         private void PortA_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
@@ -300,7 +371,8 @@ namespace SerialCsvLogger
             {
                 string raw = _port.ReadLine();
                 string line = raw.TrimEnd('\r', '\n', ' ');
-                string ts = DateTime.Now.ToString("s");
+                DateTime now = DateTime.Now;
+                string ts = now.ToString("s");
 
                 if (TryParseWind(line, out double ws, out double wd))
                 {
@@ -311,12 +383,18 @@ namespace SerialCsvLogger
                         _writer.Flush();
                     }
 
-                    // Live
+                    // Live + charts
                     BeginInvoke(new Action(() =>
                     {
                         TrimBox(liveBoxA);
                         liveBoxA.AppendText($"{ts}  WS={ws}  WD={wd}\n");
                         liveBoxA.ScrollToCaret();
+
+                        // Update charts
+                        AppendChartPoint(speedChart, now, ws);
+                        AppendChartPoint(dirChart, now, wd);
+                        speedChart.Invalidate();
+                        dirChart.Invalidate();
                     }));
                 }
                 else
@@ -338,18 +416,23 @@ namespace SerialCsvLogger
             catch (InvalidOperationException) { /* Port closed while reading */ }
         }
 
+
         private bool TryParseWind(string line, out double windSpeed, out double windDirection)
         {
-            var m = WindRegex.Match(line);
-            if (m.Success &&
-                double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out windSpeed) &&
-                double.TryParse(m.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out windDirection))
-            {
-                return true;
-            }
             windSpeed = 0; windDirection = 0;
-            return false;
+            if (string.IsNullOrWhiteSpace(line)) return false;
+
+            // Expect: ",speed,direction"
+            var parts = line.Split(',');
+            if (parts.Length < 3) return false;
+
+            var s = parts[1].Trim();
+            var d = parts[2].Trim();
+
+            return double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out windSpeed)
+                && double.TryParse(d, NumberStyles.Float, CultureInfo.InvariantCulture, out windDirection);
         }
+
 
         // ----- Sending on Port A -----
         private void SendCurrentTextA()

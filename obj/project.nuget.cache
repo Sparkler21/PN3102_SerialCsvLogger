@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "ZBMN2TVNyqk=",
+  "dgSpecHash": "Y5EnIUPdoYY=",
   "success": true,
   "projectFilePath": "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\SerialCsvLogger.csproj",
   "expectedPackageFiles": [
@@ -21,7 +21,8 @@
     "C:\\Users\\C2029069\\.nuget\\packages\\runtime.native.system.io.ports\\9.0.9\\runtime.native.system.io.ports.9.0.9.nupkg.sha512",
     "C:\\Users\\C2029069\\.nuget\\packages\\runtime.osx-arm64.runtime.native.system.io.ports\\9.0.9\\runtime.osx-arm64.runtime.native.system.io.ports.9.0.9.nupkg.sha512",
     "C:\\Users\\C2029069\\.nuget\\packages\\runtime.osx-x64.runtime.native.system.io.ports\\9.0.9\\runtime.osx-x64.runtime.native.system.io.ports.9.0.9.nupkg.sha512",
-    "C:\\Users\\C2029069\\.nuget\\packages\\system.io.ports\\9.0.9\\system.io.ports.9.0.9.nupkg.sha512"
+    "C:\\Users\\C2029069\\.nuget\\packages\\system.io.ports\\9.0.9\\system.io.ports.9.0.9.nupkg.sha512",
+    "C:\\Users\\C2029069\\.nuget\\packages\\winforms.datavisualization\\1.10.0\\winforms.datavisualization.1.10.0.nupkg.sha512"
   ],
   "logs": []
 }

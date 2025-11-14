@@ -73,3 +73,5 @@ C:\Users\C2029069\Git\PN3102_SerialCsvLogger\obj\Debug\net8.0-windows\refint\Ser
 C:\Users\C2029069\Git\PN3102_SerialCsvLogger\obj\Debug\net8.0-windows\SerialCsvLogger.pdb
 C:\Users\C2029069\Git\PN3102_SerialCsvLogger\obj\Debug\net8.0-windows\SerialCsvLogger.genruntimeconfig.cache
 C:\Users\C2029069\Git\PN3102_SerialCsvLogger\obj\Debug\net8.0-windows\ref\SerialCsvLogger.dll
+C:\Users\C2029069\Git\PN3102_SerialCsvLogger\bin\Debug\net8.0-windows\WinForms.DataVisualization.Utilities.dll
+C:\Users\C2029069\Git\PN3102_SerialCsvLogger\bin\Debug\net8.0-windows\WinForms.DataVisualization.dll

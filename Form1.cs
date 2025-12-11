@@ -139,7 +139,7 @@ namespace SerialCsvLogger
             connect2Btn = new Button { Left = 270, Top = 412 + shift, Width = 90, Height = 28, Text = "Connect B" };
             disconnect2Btn = new Button { Left = 365, Top = 412 + shift, Width = 95, Height = 28, Text = "Disconnect", Enabled = false };
 
-            intBox = new NumericUpDown { Left = 468, Top = 414 + shift, Width = 100, Minimum = 0, Maximum = 65535, DecimalPlaces = 0 };
+            intBox = new NumericUpDown { Left = 468, Top = 414 + shift, Width = 100, Minimum = -360, Maximum = 360, DecimalPlaces = 0 };
 
             // Prefix ("A"/"R")
             prefixLabel = new Label { Left = 572, Top = 418 + shift, Width = 50, Height = 18, Text = "Prefix" };

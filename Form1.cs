@@ -3,10 +3,12 @@ using System.IO;
 using System.IO.Ports;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Globalization;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
+
 
 namespace SerialCsvLogger
 {
@@ -16,6 +18,12 @@ namespace SerialCsvLogger
         private SerialPort _port;
         private StreamWriter _writer;
         private string _csvPath;
+        // Latest known motor angle (NaN = unknown)
+        private double _motorAngleDeg = double.NaN;
+        // Matches: "... now at 135.000°", "... now at -45 deg", "... now at 270 degrees (wrapped)"
+        private static readonly Regex NowAtRegex =
+            new Regex(@"now\s*at\s*([+-]?\d+(?:\.\d+)?)\s*(?:°|deg|degrees)?\b",
+                      RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         // Port B: commands + now receive view
         private SerialPort _port2;
@@ -50,14 +58,17 @@ namespace SerialCsvLogger
         private ComboBox lineEnd2Box;  // None, \n, \r, \r\n (for ASCII mode)
         private Button sendIntBtn;
         private CheckBox echo2Check;
-
-        // NEW:
         private ComboBox prefixBox;    // "A" or "R"
         private Label prefixLabel;
         private Button zeroBtn;        // sends "Z"
+        // Rolling buffer for Port B to handle chunked serial input (no newline required)
+        private readonly StringBuilder _port2Buf = new StringBuilder(256);
+        private const int Port2BufMax = 2048;
+        private readonly object _port2BufLock = new object();
 
         private Button clearBBtn;      // Clear live B
         private RichTextBox liveBoxB;  // NEW: receive view for Port B
+
 
         public Form1()
         {
@@ -223,7 +234,7 @@ namespace SerialCsvLogger
             sendModeBox.SelectedIndexChanged += SendModeBox_SelectedIndexChanged;
 
             SetSendUiEnabled(false); // Port A send disabled until connected
-            SetPortBUiEnabled(false); // Port B send/clear disabled until connected
+            //SetPortBUiEnabled(false); // Port B send/clear disabled until connected
         }
 
 
@@ -274,7 +285,7 @@ namespace SerialCsvLogger
 
             bool newFile = !File.Exists(_csvPath) || new FileInfo(_csvPath).Length == 0;
             _writer = new StreamWriter(_csvPath, append: true, Encoding.UTF8);
-            if (newFile) _writer.WriteLine("timestamp_iso,wind_speed,wind_direction");
+            if (newFile) _writer.WriteLine("timestamp_iso,wind_speed,wind_direction,motor_angle_deg");
             _writer.Flush();
 
             _port = new SerialPort((string)portBox.SelectedItem, baud, Parity.None, 8, StopBits.One)
@@ -376,10 +387,16 @@ namespace SerialCsvLogger
 
                 if (TryParseWind(line, out double ws, out double wd))
                 {
+                    // Build motor angle string once (blank if unknown)
+                    double motor = Volatile.Read(ref _motorAngleDeg);
+                    string motorAngleStr = double.IsNaN(motor)
+                        ? ""
+                        : motor.ToString(CultureInfo.InvariantCulture);
+
                     // CSV write
                     lock (this)
                     {
-                        _writer.WriteLine($"{ts},{ws.ToString(CultureInfo.InvariantCulture)},{wd.ToString(CultureInfo.InvariantCulture)}");
+                        _writer.WriteLine($"{ts},{ws.ToString(CultureInfo.InvariantCulture)},{wd.ToString(CultureInfo.InvariantCulture)},{motorAngleStr}");
                         _writer.Flush();
                     }
 
@@ -514,12 +531,12 @@ namespace SerialCsvLogger
             {
                 _port2.Open();
                 statusLabel.Text = $"B: Connected on {_port2.PortName} @ {baud}";
-                connect2Btn.Enabled = false;
-                disconnect2Btn.Enabled = true;
-                port2Box.Enabled = false;
-                baud2Box.Enabled = false;
-                SetPortBUiEnabled(true);
-                SendModeBox_SelectedIndexChanged(null, null); // apply enable/disable for prefix & line ending
+
+                // Mark connected + set ASCII + refresh states
+                SetPortBConnected(true);
+                sendModeBox.SelectedIndex = 0;   // ensure ASCII for angles
+                UpdatePortBControlsEnabled();
+
                 intBox.Focus();
             }
             catch (Exception ex)
@@ -590,6 +607,9 @@ namespace SerialCsvLogger
                         liveBoxB.ScrollToCaret();
                     }
                 }
+                // Keep focus in the angle box so Enter works repeatedly
+                intBox.Focus();
+                intBox.Select(0, intBox.Text.Length);   // highlight for quick overwrite
             }
             catch (TimeoutException)
             {
@@ -606,16 +626,42 @@ namespace SerialCsvLogger
         {
             try
             {
-                // Read whatever is available; good default if protocol isn't strictly line-based
                 string chunk = _port2.ReadExisting();
                 if (string.IsNullOrEmpty(chunk)) return;
 
+                // Always mirror to the UI
                 BeginInvoke(new Action(() =>
                 {
                     TrimBox(liveBoxB);
                     liveBoxB.AppendText(chunk);
                     liveBoxB.ScrollToCaret();
                 }));
+
+                // Accumulate and search within a rolling window (no dependency on newlines)
+                lock (_port2Buf)
+                {
+                    _port2Buf.Append(chunk);
+
+                    // Normalize some common line endings to reduce weird splits (optional)
+                    _port2Buf.Replace("\r\n", "\n");
+
+                    // Scan the whole buffer for one or more "now at ..." occurrences
+                    string buf = _port2Buf.ToString();
+                    foreach (Match m in NowAtRegex.Matches(buf))
+                    {
+                        if (double.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out double ang))
+                        {
+                            Volatile.Write(ref _motorAngleDeg, ang);
+                            BeginInvoke(new Action(() => statusLabel.Text = $"B: now at {ang:0.###}°"));
+                        }
+                    }
+
+                    // Keep only the tail to avoid unbounded growth; 2 KB is plenty to cover split phrases
+                    if (_port2Buf.Length > Port2BufMax)
+                    {
+                        _port2Buf.Remove(0, _port2Buf.Length - Port2BufMax);
+                    }
+                }
             }
             catch (TimeoutException) { }
             catch (IOException)
@@ -625,15 +671,21 @@ namespace SerialCsvLogger
             catch (InvalidOperationException) { /* Port closed while reading */ }
         }
 
+
+
         // ----- Helpers -----
-        private void SendModeBox_SelectedIndexChanged(object sender, EventArgs e)
+
+        private void SetPortBConnected(bool isConnected)
         {
-            bool ascii = sendModeBox.SelectedIndex == 0;
-            if (sendIntBtn.Enabled) // only toggle when connected
-            {
-                lineEnd2Box.Enabled = ascii;
-                prefixBox.Enabled = ascii;
-            }
+            // Only these four are managed here:
+            connect2Btn.Enabled = !isConnected;
+            disconnect2Btn.Enabled = isConnected;
+            port2Box.Enabled = !isConnected;
+            baud2Box.Enabled = !isConnected;
+
+            // Everything else (angle box, prefix, line ending, etc.)
+            // is handled by UpdatePortBControlsEnabled():
+            UpdatePortBControlsEnabled();
         }
 
         private void TrimBox(RichTextBox box)
@@ -682,6 +734,8 @@ namespace SerialCsvLogger
                     _port2.DataReceived -= PortB_DataReceived;
                     if (_port2.IsOpen) _port2.Close();
                     _port2.Dispose();
+                    SetPortBConnected(false);
+                    statusLabel.Text = "B: Disconnected.";
                     _port2 = null;
                 }
             }
@@ -690,7 +744,7 @@ namespace SerialCsvLogger
             disconnect2Btn.Enabled = false;
             port2Box.Enabled = true;
             baud2Box.Enabled = true;
-            SetPortBUiEnabled(false);
+            //SetPortBUiEnabled(false);
         }
 
         private void SetSendUiEnabled(bool on)
@@ -700,19 +754,31 @@ namespace SerialCsvLogger
             lineEndBox.Enabled = on;
             echoCheck.Enabled = on;
         }
-
-        private void SetPortBUiEnabled(bool on)
+        private void UpdatePortBControlsEnabled()
         {
-            intBox.Enabled = on;
-            sendIntBtn.Enabled = on;
-            sendModeBox.Enabled = on;
-            lineEnd2Box.Enabled = on && sendModeBox.SelectedIndex == 0; // ASCII only
-            echo2Check.Enabled = on;
-            clearBBtn.Enabled = on;
-            zeroBtn.Enabled = on; // <--- NEW
-            // NEW:
-            prefixBox.Enabled = on && sendModeBox.SelectedIndex == 0;  // ASCII only
+            bool connected = _port2 != null && _port2.IsOpen;
+            bool ascii = sendModeBox.SelectedIndex == 0;
+
+            // Always enable the basics when connected
+            intBox.Enabled = connected;
+            sendIntBtn.Enabled = connected;
+            sendModeBox.Enabled = connected;
+            echo2Check.Enabled = connected;
+            clearBBtn.Enabled = connected;
+            zeroBtn.Enabled = connected;
+
+            // Only in ASCII mode
+            lineEnd2Box.Enabled = connected && ascii;
+            prefixBox.Enabled = connected && ascii;
+            //if (anticlockwiseCheck != null) anticlockwiseCheck.Enabled = connected && ascii;
         }
+
+        // Call this on mode changes
+        private void SendModeBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            UpdatePortBControlsEnabled();
+        }
+
 
         private void SendZeroOnB()
         {

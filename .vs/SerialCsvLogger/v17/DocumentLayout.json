@@ -30,9 +30,9 @@
               "Title": "Form1.cs",
               "DocumentMoniker": "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\Form1.cs",
               "RelativeDocumentMoniker": "Form1.cs",
-              "ToolTip": "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\Form1.cs*",
-              "RelativeToolTip": "Form1.cs*",
-              "ViewState": "AgIAAHcAAAAAAAAAAAAqwI0AAAByAAAAAAAAAA==",
+              "ToolTip": "C:\\Users\\C2029069\\Git\\PN3102_SerialCsvLogger\\Form1.cs",
+              "RelativeToolTip": "Form1.cs",
+              "ViewState": "AgIAAGACAAAAAAAAAAAWwOECAAA6AAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-09-26T15:33:33.608Z",
               "EditorCaption": ""
@@ -47,8 +47,7 @@
               "RelativeToolTip": "Form1.Designer.cs",
               "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-09-26T15:33:24.721Z",
-              "EditorCaption": ""
+              "WhenOpened": "2025-09-26T15:33:24.721Z"
             }
           ]
         }
